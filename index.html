@@ -54,6 +54,11 @@ table.mini td,table.mini th{border-bottom:1px solid var(--line);padding:5px 4px;
 .hidden{display:none!important}
 .line{display:flex;gap:6px;align-items:center;margin-bottom:6px}.line input{flex:1}
 .crew.off{opacity:.55}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
+.cal .h{font-size:12px;color:var(--sub)}
+.cal button{height:38px;border:1px solid var(--line);background:#fff;border-radius:8px;font-size:15px;color:var(--ink)}
+.cal button.off{background:#fde8e7;border-color:var(--warn);color:var(--warn);font-weight:700}
+.cal button.cur{outline:2px solid var(--acc)}
 .crew.curp{border-color:var(--acc);background:var(--acc2)}
 .spread{display:flex;justify-content:space-between;align-items:center;gap:6px}
 .edi{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center;font-size:14px}
@@ -229,6 +234,12 @@ table.mini td,table.mini th{border-bottom:1px solid var(--line);padding:5px 4px;
     <div class="note">1行に1台：車番,車両総重量kg,車両重量kg,最大積載量kg,社名</div>
     <textarea id="sCars" style="min-height:110px"></textarea>
     <label class="f">積載物（カンマ区切り）</label><input type="text" id="sItems">
+  </div>
+  <div class="card" id="hdCard">
+    <h2>休日カレンダー <span class="btns"><button class="btn s" id="hdPrev">‹ 前の月</button><button class="btn s" id="hdNext">次の月 ›</button></span></h2>
+    <div class="note">会社の年間休日カレンダーの休日（赤）を入れてあります。日付をタップすると 休日⇔出勤日 が切り替わります。次回の作業予定は休日を飛ばして作ります。R9年4月以降は仮（日曜・祝日のみ）なので、来年度のカレンダーが出たら直してください。</div>
+    <div id="hdCal" style="margin-top:8px"></div>
+    <div class="btns" style="margin-top:6px"><button class="btn s w" id="hdReset">最初の休日に戻す</button></div>
   </div>
   <div class="card">
     <h2>新規入場者教育</h2>
@@ -434,8 +445,17 @@ const COORD_NONE = "足元と周囲の状況を確認し、各自の作業範囲
 const COORD_MULTI = "複数の作業を同時に行うため、作業前に互いの作業範囲と手順を確認すること";
 // 重機点検タブで「本日使用」と判定する機械名のキーワード
 const MC_TAG = {heavy:["バックホウ","ユンボ","ショベル","ローラ","ブルドーザ","クレーン","重機","杭打"],elec:["発電機"],heat:["発電機"]};
-// 休工日（週休２日の土日に加えて）：年末年始・祝日
-const HOLIDAYS = ["2026-12-29","2026-12-30","2026-12-31","2027-01-01","2027-01-02","2027-01-03","2027-01-11","2027-02-11","2027-02-23","2027-03-22","2027-04-29","2027-05-03","2027-05-04","2027-05-05"];
+// 休日：筒賀建設㈱ 年間休日カレンダー（R8.4.1～R9.3.31）の赤字の日。設定の「休日カレンダー」で画面から直せる（DB.set.holidays）
+// R9.4月以降は次年度のカレンダーが出るまでの仮（日曜・祝日のみ）
+const HOLIDAYS = [
+  "2026-11-01","2026-11-03","2026-11-08","2026-11-14","2026-11-15","2026-11-22","2026-11-23","2026-11-28","2026-11-29",
+  "2026-12-06","2026-12-12","2026-12-13","2026-12-20","2026-12-27","2026-12-29","2026-12-30","2026-12-31",
+  "2027-01-01","2027-01-02","2027-01-03","2027-01-04","2027-01-05","2027-01-10","2027-01-11","2027-01-17","2027-01-23","2027-01-24","2027-01-31",
+  "2027-02-07","2027-02-11","2027-02-13","2027-02-14","2027-02-21","2027-02-23","2027-02-27","2027-02-28",
+  "2027-03-06","2027-03-07","2027-03-14","2027-03-20","2027-03-21","2027-03-22","2027-03-28",
+  "2027-04-04","2027-04-11","2027-04-18","2027-04-25","2027-04-29",
+  "2027-05-02","2027-05-03","2027-05-04","2027-05-05","2027-05-09","2027-05-16","2027-05-23","2027-05-30"
+];
 const JUKI_ITEMS = [["ラジエータ/ホース/キャップ","冷却水の量 汚れ 水洩れ"],["エンジンオイル","油量 油洩れ"],["エンジン全般","始動性 セルモータ 異音 排気色 排気音"],["動力伝達・操向全般","作動 亀裂 損傷 異音"],["キャタ/ローラ/アイドラ","張り具合 作動 磨耗 ガタ 油洩れ"],["作動油","油量 油洩れ"],["油圧シリンダ/ロッド","油洩れ 擦傷 亀裂 変形 作動"],["バケット/ブレード/アタッチメント","磨耗 亀裂 損傷"],["セーフティロック","作動"],["ハンドル/レバー","作動 遊び ストローク 損傷 磨耗"],["警報装置","作動（充電/水温/油量/油圧/警報）他"],["各スイッチ類","作動（ライト/ワイパ）他"],["車体全般","亀裂 損傷 弛み"]];
 
 // 新規入場者教育の教育内容（初期値。設定で編集可）
@@ -494,9 +514,10 @@ function day(){if(!DB.days[CUR])DB.days[CUR]=blankDay();return DB.days[CUR]}
 function plan(){return DB.set.plan||PLAN}
 function planEdit(){if(!DB.set.plan)DB.set.plan=JSON.parse(JSON.stringify(PLAN));return DB.set.plan}
 function planFor(s){const out=[];for(const [a,b,w] of plan()){if(s>=a&&s<=b)w.forEach(x=>{if(!out.includes(x))out.push(x)})}return out}
-function isOff(s){const g=parse(s).getDay();return g===0||g===6||HOLIDAYS.includes(s)}
+function holidays(){return DB.set.holidays||HOLIDAYS}
+function isOff(s){return holidays().includes(s)}
 function nextPlan(s){
-  // 次の作業日（土日・祝日・年末年始を除く）の計画 → {date, works}
+  // 次の作業日（会社カレンダーの休日を除く）の計画 → {date, works}
   let d=parse(s);for(let i=0;i<20;i++){d.setDate(d.getDate()+1);const ds=ymd(d);if(isOff(ds))continue;const p=planFor(ds);if(p.length)return {date:ds,works:p}}
   return null;
 }
@@ -522,7 +543,7 @@ function renderAll(){
   const D=day(),S=DB.set;
   $("date").value=CUR;$("wa").textContent=wareki(CUR);
   const p=planFor(CUR);
-  $("planNote").textContent=(isOff(CUR)?"休工日（土日・祝日・年末年始）です。":"")+(p.length?"工程表の予定："+p.join("、"):"工程表ではこの日の予定作業はありません（作業を選んでください）");
+  $("planNote").textContent=(isOff(CUR)?"この日は会社カレンダーの休日です。":"")+(p.length?"工程表の予定："+p.join("、"):"工程表ではこの日の予定作業はありません（作業を選んでください）");
   // 天候
   $("weather").innerHTML=["晴","曇","雨","雪"].map(w=>`<button class="chip ${D.weather===w?"on":""}" data-w="${w}">${w}</button>`).join("");
   // 作業
@@ -547,8 +568,19 @@ function renderAll(){
   $("sProject").value=S.project;$("sInst").value=S.inst;$("sAgent").value=S.agent;$("sChief").value=S.chief;$("sPatrol").value=S.patrol;$("sStamp").checked=!!S.stamp;
   $("sMembers").value=S.members;$("sMachines").value=S.machines;$("sCars").value=S.cars;$("sItems").value=S.items;$("sKey").value=S.key||"";
   $("sEdu").value=S.eduItems;$("sHospital").value=S.hospital;
-  renderPlan();renderEdu();
+  renderPlan();renderEdu();renderHd();
 }
+/* ---------- 休日カレンダー ---------- */
+let HD_M=null; // 表示中の月 "YYYY-MM"
+function renderHd(){
+  if(!HD_M)HD_M=CUR.slice(0,7);
+  const [y,m]=HD_M.split("-").map(Number);const first=new Date(y,m-1,1).getDay(),n=new Date(y,m,0).getDate();const H=holidays();
+  let h=`<div style="text-align:center;font-weight:700;margin-bottom:4px">令和${y-2018}年${m}月（${y}年）　休日 ${H.filter(d=>d.startsWith(HD_M)).length}日</div><div class="cal">`+"日月火水木金土".split("").map((w,i)=>`<div class="h" style="${i===0?"color:var(--warn)":""}">${w}</div>`).join("");
+  for(let i=0;i<first;i++)h+="<div></div>";
+  for(let d=1;d<=n;d++){const ds=HD_M+"-"+String(d).padStart(2,"0");h+=`<button class="${H.includes(ds)?"off":""} ${ds===CUR?"cur":""}" data-hd="${ds}">${d}</button>`}
+  $("hdCal").innerHTML=h+"</div>";
+}
+function hdMove(k){const [y,m]=HD_M.split("-").map(Number);const d=new Date(y,m-1+k,1);HD_M=ymd(d).slice(0,7);renderHd()}
 /* ---------- 工程表 ---------- */
 let PL_OPEN=null;
 function rd(s){if(!s)return"";const d=parse(s);return "R"+(d.getFullYear()-2018)+"."+(d.getMonth()+1)+"."+d.getDate()}
@@ -743,6 +775,7 @@ function renderEduListOnly(){const f=$("enForm");const keep=f.dataset.id;renderE
 document.addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;const D=day();
   if(b.dataset.t){goTab(b.dataset.t);return}
+  if(b.dataset.hd){const ds=b.dataset.hd;if(!DB.set.holidays)DB.set.holidays=HOLIDAYS.slice();const H=DB.set.holidays,j=H.indexOf(ds);if(j>=0)H.splice(j,1);else{H.push(ds);H.sort()}save();renderAll();return}
   if(b.dataset.plopen){const i=+b.dataset.plopen;PL_OPEN=PL_OPEN===i?null:i;renderPlan();return}
   if(b.dataset.plw){const [i,k]=b.dataset.plw.split("|");const w=planEdit()[+i][2];const j=w.indexOf(k);if(j>=0)w.splice(j,1);else w.push(k);w.sort((x,y)=>ORDER.indexOf(x)-ORDER.indexOf(y));planChanged();return}
   if(b.dataset.pldel){if(!confirm("この行を工程表から削除します。よろしいですか？"))return;planEdit().splice(+b.dataset.pldel,1);PL_OPEN=null;planChanged();toast("削除しました");return}
@@ -765,6 +798,9 @@ document.addEventListener("click",e=>{
     case "autoFill":autoFill();break;
     case "aiFill":aiFill();break;
     case "copyPrev":copyPrev();break;
+    case "hdPrev":hdMove(-1);break;
+    case "hdNext":hdMove(1);break;
+    case "hdReset":if(confirm("休日を最初の内容（会社カレンダー）に戻します。よろしいですか？")){delete DB.set.holidays;save();renderAll();toast("最初の休日に戻しました")}break;
     case "toPlan":goTab("set");setTimeout(()=>$("plCard").scrollIntoView({behavior:"smooth"}),30);break;
     case "plAdd":{const P=planEdit();P.push([CUR,CUR,[]]);PL_OPEN=P.length-1;planChanged();toast("行を追加しました。日付と作業を選んでください");break}
     case "plReset":if(confirm("工程表を最初の内容に戻します。画面で直した内容は消えます。よろしいですか？")){delete DB.set.plan;PL_OPEN=null;planChanged();toast("最初の工程表に戻しました")}break;
@@ -809,7 +845,7 @@ document.addEventListener("change",e=>{
   if(e.target.id==="sStamp"){DB.set.stamp=e.target.checked;save()}if(e.target.id==="ldCar")e.target.dispatchEvent(new Event("input",{bubbles:true}))});
 // 工程表の日付は、日付選択を閉じたときに画面へ反映（選択中に描き直すとiPhoneの日付選択が閉じるため）
 document.addEventListener("focusout",e=>{const t=e.target;if(t.dataset&&t.dataset.pl!==undefined&&t._dirty){t._dirty=false;setTimeout(planChanged,250)}});
-$("date").addEventListener("change",e=>{if(!e.target.value)return;CUR=e.target.value;renderAll()});
+$("date").addEventListener("change",e=>{if(!e.target.value)return;CUR=e.target.value;HD_M=null;renderAll()});
 $("imp").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.days||!d.set)throw 0;if(confirm("今のデータを、読み込んだバックアップで置き換えます。よろしいですか？")){DB=norm(d);EN=null;PL_OPEN=null;save();renderAll();toast("読み込みました")}}catch(x){toast("読み込めないファイルです")}};r.readAsText(f)});
 
 /* ===================== 印刷 ===================== */

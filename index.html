@@ -19,6 +19,8 @@ header h1{font-size:16px;margin:0 0 6px;font-weight:600}
 .daterow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .daterow input[type=date]{font-size:16px;padding:6px 8px;border-radius:8px;border:none}
 .daterow .wa{font-size:13px;opacity:.9}
+.gear{margin-left:auto;width:40px;height:36px;border:none;border-radius:10px;background:rgba(255,255,255,.18);color:#fff;font-size:22px;line-height:1;padding:0}
+.gear.on{background:#fff;color:var(--acc)}
 nav{display:flex;gap:4px;overflow-x:auto;margin-top:8px}
 nav button{flex:0 0 auto;border:none;background:rgba(255,255,255,.18);color:#fff;padding:7px 12px;border-radius:16px;font-size:14px}
 nav button.on{background:#fff;color:var(--acc);font-weight:700}
@@ -89,6 +91,7 @@ table.mini td,table.mini th{border-bottom:1px solid var(--line);padding:5px 4px;
   <div class="daterow">
     <input type="date" id="date">
     <span class="wa" id="wa"></span>
+    <button class="gear" data-t="set" aria-label="設定" title="設定">⚙</button>
   </div>
   <nav id="tabs">
     <button data-t="nippo" class="on">作業日報</button>
@@ -96,7 +99,6 @@ table.mini td,table.mini th{border-bottom:1px solid var(--line);padding:5px 4px;
     <button data-t="juki">重機点検</button>
     <button data-t="load">積載管理</button>
     <button data-t="edu">新規入場</button>
-    <button data-t="set">設定</button>
   </nav>
 </header>
 
@@ -767,7 +769,7 @@ function copyPrev(){
   DB.days[CUR]=src;save();renderAll();toast(wareki(keys[keys.length-1])+"をコピーしました");
 }
 
-function goTab(t){document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x.dataset.t===t));document.querySelectorAll("main>section").forEach(s=>s.classList.toggle("hidden",s.id!=="t-"+t));window.scrollTo(0,0)}
+function goTab(t){document.querySelectorAll("button[data-t]").forEach(x=>x.classList.toggle("on",x.dataset.t===t));document.querySelectorAll("main>section").forEach(s=>s.classList.toggle("hidden",s.id!=="t-"+t));window.scrollTo(0,0)}
 // 一覧だけ描き直す（入力中のフォームはそのまま）
 function renderEduListOnly(){const f=$("enForm");const keep=f.dataset.id;renderEdu();f.dataset.id=keep}
 

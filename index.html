@@ -53,6 +53,9 @@ table.mini td,table.mini th{border-bottom:1px solid var(--line);padding:5px 4px;
 .ng{color:var(--warn);font-weight:700}.ok{color:var(--acc);font-weight:700}
 .hidden{display:none!important}
 .line{display:flex;gap:6px;align-items:center;margin-bottom:6px}.line input{flex:1}
+.crew.curp{border-color:var(--acc);background:var(--acc2)}
+.spread{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.edi{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center;font-size:14px}
 /* ---------- 印刷 ---------- */
 #print{display:none}
 @media print{
@@ -86,6 +89,7 @@ table.mini td,table.mini th{border-bottom:1px solid var(--line);padding:5px 4px;
     <button data-t="ky">KY</button>
     <button data-t="juki">重機点検</button>
     <button data-t="load">積載管理</button>
+    <button data-t="edu">新規入場</button>
     <button data-t="set">設定</button>
   </nav>
 </header>
@@ -94,7 +98,7 @@ table.mini td,table.mini th{border-bottom:1px solid var(--line);padding:5px 4px;
 <!-- ================= 作業日報 ================= -->
 <section id="t-nippo">
   <div class="card">
-    <h2>今日の準備 <span class="btns"><button class="btn s" id="copyPrev">前日をコピー</button></span></h2>
+    <h2>今日の準備 <span class="btns"><button class="btn s" id="toPlan">工程表を直す</button><button class="btn s" id="copyPrev">前日をコピー</button></span></h2>
     <div class="note" id="planNote"></div>
     <label class="f">天候</label>
     <div class="chips" id="weather"></div>
@@ -177,6 +181,17 @@ table.mini td,table.mini th{border-bottom:1px solid var(--line);padding:5px 4px;
   <div class="card"><h2>この日の記録</h2><table class="mini" id="ldTable"></table></div>
 </section>
 
+<!-- ================= 新規入場者教育 ================= -->
+<section id="t-edu" class="hidden">
+  <div class="card">
+    <h2>新規入場者教育 <button class="btn s p" id="enAdd">＋入場者を登録</button></h2>
+    <div class="note">新しく現場に入る人ごとに登録します。調査票（本人情報）と教育記録を1枚にまとめて印刷できます。本人署名欄は印刷後に手書きしてもらってください。登録した人は作業員名簿にも自動で追加されます。</div>
+    <div id="enList" style="margin-top:8px"></div>
+    <div class="btns" style="margin-top:8px"><button class="btn" id="enPrintList">実施一覧を印刷/PDF</button></div>
+  </div>
+  <div class="card hidden" id="enForm"></div>
+</section>
+
 <!-- ================= 設定 ================= -->
 <section id="t-set" class="hidden">
   <div class="card">
@@ -191,6 +206,12 @@ table.mini td,table.mini th{border-bottom:1px solid var(--line);padding:5px 4px;
       <div><label class="f">安全巡視員</label><input type="text" id="sPatrol"></div>
     </div>
     <label class="f"><input type="checkbox" id="sStamp"> 印刷時に印影（姓の丸印）を入れる</label>
+  </div>
+  <div class="card" id="plCard">
+    <h2>工程表 <button class="btn s" id="plAdd">＋行を追加</button></h2>
+    <div class="note">日付の範囲ごとに、その期間の作業を選びます。日報の「今日の作業」と「次回の作業予定」はここから自動で決まります。まだ何も入力していない日（今日以降）は、工程表を直すと作業も入れ替わります。</div>
+    <div id="plList" style="margin-top:8px"></div>
+    <div class="btns" style="margin-top:4px"><button class="btn s w" id="plReset">最初の工程表に戻す</button></div>
   </div>
   <div class="card">
     <h2>作業員名簿</h2>
@@ -207,6 +228,13 @@ table.mini td,table.mini th{border-bottom:1px solid var(--line);padding:5px 4px;
     <div class="note">1行に1台：車番,車両総重量kg,車両重量kg,最大積載量kg,社名</div>
     <textarea id="sCars" style="min-height:110px"></textarea>
     <label class="f">積載物（カンマ区切り）</label><input type="text" id="sItems">
+  </div>
+  <div class="card">
+    <h2>新規入場者教育</h2>
+    <label class="f">教育内容（1行に1項目。教育記録に印刷されます）</label>
+    <textarea id="sEdu" style="min-height:160px"></textarea>
+    <label class="f">最寄りの病院・連絡先（教育記録に印刷されます）</label>
+    <input type="text" id="sHospital" placeholder="例：○○病院　TEL 0826-xx-xxxx">
   </div>
   <div class="card">
     <h2>AI（任意）</h2>
@@ -376,16 +404,40 @@ const CHECKS = {
 const NA_DEFAULT = ["安全帯の使用状況","足場の設置状況","開口部・立入禁止の表示","上下作業の連絡・調整","喫煙場所の設置","通電表示"];
 const JUKI_ITEMS = [["ラジエータ/ホース/キャップ","冷却水の量 汚れ 水洩れ"],["エンジンオイル","油量 油洩れ"],["エンジン全般","始動性 セルモータ 異音 排気色 排気音"],["動力伝達・操向全般","作動 亀裂 損傷 異音"],["キャタ/ローラ/アイドラ","張り具合 作動 磨耗 ガタ 油洩れ"],["作動油","油量 油洩れ"],["油圧シリンダ/ロッド","油洩れ 擦傷 亀裂 変形 作動"],["バケット/ブレード/アタッチメント","磨耗 亀裂 損傷"],["セーフティロック","作動"],["ハンドル/レバー","作動 遊び ストローク 損傷 磨耗"],["警報装置","作動（充電/水温/油量/油圧/警報）他"],["各スイッチ類","作動（ライト/ワイパ）他"],["車体全般","亀裂 損傷 弛み"]];
 
+// 新規入場者教育の教育内容（初期値。設定で編集可）
+const EDU_DEFAULT = [
+  "工事概要（工事名・工期・作業内容・工程）",
+  "現場の配置（工事用道路・資材仮置き場・駐車場・休憩所・トイレ）",
+  "河川内作業の危険と増水時の退避方法・退避場所",
+  "中国自動車道橋梁下での作業上の注意（重機ブーム・吊り荷の桁・橋脚への接触防止）",
+  "国道186号への出入り時の注意と交通誘導員の指示",
+  "重機の旋回範囲・吊り荷の下への立入禁止",
+  "保護具の着用（保護帽・安全靴・救命胴衣・手袋）",
+  "朝礼・KY活動・指差呼称の励行",
+  "冬期の注意（路面凍結・積雪・寒さによる体調管理）",
+  "濁水・油の流出防止など環境保全（漁協との協議事項）",
+  "緊急時の連絡体制・最寄りの病院",
+  "作業時間・休憩時間・週休２日",
+  "健康状態の申告（体調不良時は作業責任者に申し出ること）"
+];
+const QUALS = ["車両系建設機械（整地等）","車両系建設機械（解体用）","小型移動式クレーン","移動式クレーン","玉掛け","職長・安全衛生責任者","酸素欠乏・硫化水素","足場の組立て等","刈払機","普通自動車免許","中型自動車免許","大型自動車免許","交通誘導警備業務検定"];
+
 /* ===================== 保存 ===================== */
 const KEY="tsutsuga-genba-v1";
 let DB = load();
+function norm(d){
+  d.entrants=d.entrants||[];
+  if(d.set.eduItems==null)d.set.eduItems=EDU_DEFAULT.join("\n");
+  if(d.set.hospital==null)d.set.hospital="";
+  return d;
+}
 function load(){
   let d; try{d=JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){}
-  return d||{days:{},set:{
+  return norm(d||{days:{},set:{
     project:PROJECT_DEFAULT,inst:"佐々木 晃史",agent:"佐々木 晃史",chief:"佐々木 晃史",patrol:"佐々木 晃史",stamp:true,
     members:"佐々木 晃史\n池田 一也",
     machines:"バックホウ 0.45m3 クレーン機能付\n発動発電機 45kVA",
-    cars:"",items:"土砂,大型土のう,再生砕石,撤去土砂,高密度PE管",key:""}};
+    cars:"",items:"土砂,大型土のう,再生砕石,撤去土砂,高密度PE管",key:""}});
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){toast("保存に失敗しました")}}
 const $=id=>document.getElementById(id);
@@ -405,7 +457,9 @@ function blankDay(){
     juki:{},loads:[]};
 }
 function day(){if(!DB.days[CUR])DB.days[CUR]=blankDay();return DB.days[CUR]}
-function planFor(s){const out=[];for(const [a,b,w] of PLAN){if(s>=a&&s<=b)w.forEach(x=>{if(!out.includes(x))out.push(x)})}return out}
+function plan(){return DB.set.plan||PLAN}
+function planEdit(){if(!DB.set.plan)DB.set.plan=JSON.parse(JSON.stringify(PLAN));return DB.set.plan}
+function planFor(s){const out=[];for(const [a,b,w] of plan()){if(s>=a&&s<=b)w.forEach(x=>{if(!out.includes(x))out.push(x)})}return out}
 function nextPlan(s){
   // 次の作業日（土日を除く）の計画
   let d=parse(s);for(let i=0;i<10;i++){d.setDate(d.getDate()+1);if(d.getDay()===0||d.getDay()===6)continue;const p=planFor(ymd(d));if(p.length)return p}
@@ -441,7 +495,89 @@ function renderAll(){
   // 設定
   $("sProject").value=S.project;$("sInst").value=S.inst;$("sAgent").value=S.agent;$("sChief").value=S.chief;$("sPatrol").value=S.patrol;$("sStamp").checked=!!S.stamp;
   $("sMembers").value=S.members;$("sMachines").value=S.machines;$("sCars").value=S.cars;$("sItems").value=S.items;$("sKey").value=S.key||"";
+  $("sEdu").value=S.eduItems;$("sHospital").value=S.hospital;
+  renderPlan();renderEdu();
 }
+/* ---------- 工程表 ---------- */
+let PL_OPEN=null;
+function rd(s){if(!s)return"";const d=parse(s);return "R"+(d.getFullYear()-2018)+"."+(d.getMonth()+1)+"."+d.getDate()}
+function renderPlan(){
+  const P=plan();
+  const idx=P.map((_,i)=>i).sort((x,y)=>(P[x][0]+P[x][1]).localeCompare(P[y][0]+P[y][1]));
+  $("plList").innerHTML=idx.map(i=>{const [a,b,w]=P[i];const open=PL_OPEN===i;const cur=CUR>=a&&CUR<=b;
+    return `<div class="crew ${cur?"curp":""}"><div class="spread"><div><b>${rd(a)}～${rd(b)}</b>${cur?"　<span class='ok'>表示中の日</span>":""}<br><span style="font-size:13px">${w.length?w.map(esc).join("、"):"<span class='ng'>作業が選ばれていません</span>"}</span>${a>b?"<div class='ng'>開始日が終了日より後になっています</div>":""}</div>
+      <button class="btn s" data-plopen="${i}">${open?"閉じる":"直す"}</button></div>
+      ${open?`<div class="row"><div><label class="f">開始日</label><input type="date" data-pl="${i}" data-pf="0" value="${a}"></div><div><label class="f">終了日</label><input type="date" data-pl="${i}" data-pf="1" value="${b}"></div></div>
+      <label class="f">この期間の作業（タップで選択・解除）</label>
+      <div class="chips">${ORDER.map(k=>`<button class="chip ${w.includes(k)?"on":""}" data-plw="${i}|${esc(k)}">${esc(k)}</button>`).join("")}</div>
+      <button class="btn s w" data-pldel="${i}" style="margin-top:8px">この行を削除</button>`:""}</div>`}).join("")||"<div class='note'>工程表が空です。「＋行を追加」で作ってください。</div>";
+}
+// まだ何も入力していない日（今日以降）は、工程表に合わせて作業を入れ替える
+function untouched(D){return !D.crews.some(c=>c.work||c.ins)&&!D.ky.work&&!D.materials&&!D.next}
+function planChanged(){
+  const today=ymd(new Date());
+  for(const ds of Object.keys(DB.days)){const D=DB.days[ds];if(ds>=today&&untouched(D))D.works=planFor(ds)}
+  save();renderAll();
+}
+/* ---------- 新規入場者教育 ---------- */
+let EN=null;
+function E(){return DB.entrants.find(x=>x.id===EN)}
+function eduItems(){return (DB.set.eduItems||"").split("\n").map(s=>s.trim()).filter(Boolean)}
+function eduList(e){const it=eduItems();(e.eduDone||[]).forEach(t=>{if(!it.includes(t))it.push(t)});return it}
+function ageAt(b,d){if(!b||!d)return null;const x=parse(b),y=parse(d);let a=y.getFullYear()-x.getFullYear();if(y.getMonth()<x.getMonth()||(y.getMonth()===x.getMonth()&&y.getDate()<x.getDate()))a--;return a}
+function jdate(s){if(!s)return"";const d=parse(s),y=d.getFullYear(),k=s.replace(/-/g,"");
+  const [era,base]=k>="20190501"?["令和",2018]:k>="19890108"?["平成",1988]:k>="19261225"?["昭和",1925]:["大正",1911];
+  const n=y-base;return era+(n===1?"元":n)+"年"+(d.getMonth()+1)+"月"+d.getDate()+"日"}
+function newEntrant(){return {id:Date.now().toString(36),date:CUR,time:"",co:"筒賀建設㈱",job:"",kana:"",name:"",birth:"",blood:"",addr:"",tel:"",
+  emName:"",emRel:"",emTel:"",exp:"",quals:"",health:"",bp:"",special:"",kenpo:"",nenkin:"",koyo:"",kentai:"",teach:DB.set.agent||"",eduDone:[],note:""}}
+function ageNote(e){const a=ageAt(e.birth,e.date);if(a==null)return"";
+  return a+"歳"+(a<18?"　<span class='ng'>年少者（18歳未満）：危険有害業務に就かせないこと</span>":a>=65?"　<span class='ng'>高年齢者：作業配置・体調に配慮すること</span>":"")}
+function renderEdu(){
+  const L=DB.entrants.slice().sort((x,y)=>(y.date||"").localeCompare(x.date||""));
+  $("enList").innerHTML=L.map(e=>{const it=eduList(e),dn=it.filter(t=>(e.eduDone||[]).includes(t)).length;
+    return `<div class="crew ${EN===e.id?"curp":""}"><div class="spread"><div><b>${esc(e.name||"（氏名未入力）")}</b>　<span style="font-size:13px">${esc(e.co)}${e.job?"・"+esc(e.job):""}</span><br>
+    <span class="note">${rd(e.date)} 入場　教育 <span class="${dn===it.length?"ok":"ng"}">${dn}/${it.length}</span></span></div>
+    <div class="btns"><button class="btn s" data-enopen="${e.id}">${EN===e.id?"閉じる":"直す"}</button><button class="btn s" data-enprint="${e.id}">印刷</button></div></div></div>`}).join("")||"<div class='note'>まだ登録がありません</div>";
+  const f=$("enForm"),e=E();
+  if(!e){f.classList.add("hidden");f.innerHTML="";return}
+  f.classList.remove("hidden");
+  if(f.dataset.id===e.id)return; // 入力中は作り直さない
+  f.dataset.id=e.id;
+  const fi=(k,l,t="text",x="")=>`<div><label class="f">${l}</label><input type="${t}" data-en="${k}" value="${esc(e[k])}" ${x}></div>`;
+  const fs=(k,l,o)=>`<div><label class="f">${l}</label><select data-en="${k}">${["",...o].map(v=>`<option value="${esc(v)}" ${e[k]===v?"selected":""}>${esc(v)}</option>`).join("")}</select></div>`;
+  const it=eduList(e);
+  f.innerHTML=`<h2>入場者の情報 <button class="btn s" id="enClose">閉じる</button></h2>
+    <div class="row">${fi("date","入場・教育日","date")}${fi("time","教育時間","text","placeholder='例：8:00～8:30'")}</div>
+    <div class="row">${fi("co","会社名")}${fi("job","職種","text","placeholder='例：普通作業員'")}</div>
+    <div class="row">${fi("name","氏名")}${fi("kana","ふりがな")}</div>
+    <div class="row">${fi("birth","生年月日","date")}${fs("blood","血液型",["A","B","O","AB","不明"])}</div>
+    <div class="note" id="enAge" style="margin-top:4px">${ageNote(e)}</div>
+    ${fi("addr","現住所")}
+    <div class="row">${fi("tel","電話番号","tel")}${fi("exp","経験年数","number","inputmode='numeric'")}</div>
+    <label class="f" style="margin-top:12px;font-weight:700">緊急連絡先</label>
+    <div class="row">${fi("emName","氏名")}<div style="flex:.5"><label class="f">続柄</label><input type="text" data-en="emRel" value="${esc(e.emRel)}"></div></div>
+    ${fi("emTel","電話番号","tel")}
+    <label class="f" style="margin-top:12px">資格・免許（下のボタンで追加。自由に書き足せます）</label>
+    <textarea data-en="quals" id="enQuals">${esc(e.quals)}</textarea>
+    <div class="chips" style="margin-top:4px">${QUALS.map(q=>`<button class="chip" data-q="${esc(q)}">＋${esc(q)}</button>`).join("")}</div>
+    <div class="row">${fi("health","健康診断 受診日","date")}${fi("bp","血圧","text","placeholder='例：128/82'")}</div>
+    ${fi("special","特殊健康診断","text","placeholder='例：なし／じん肺 R8.4.10'")}
+    <label class="f" style="margin-top:12px;font-weight:700">社会保険等</label>
+    <div class="row">${fs("kenpo","健康保険",["協会けんぽ","健康保険組合","建設国保","国民健康保険","適用除外"])}${fs("nenkin","年金",["厚生年金","国民年金","受給者"])}</div>
+    <div class="row">${fs("koyo","雇用保険",["加入","日雇特例","適用除外"])}${fs("kentai","建退共",["加入","未加入","対象外"])}</div>
+    <h2 style="margin-top:14px">教育内容 <button class="btn s p" id="enAllEdu">全部実施</button></h2>
+    <div class="edi">${it.map(t=>{const on=(e.eduDone||[]).includes(t);return `<div>${esc(t)}</div><button class="ckb ${on?"o":""}" data-edu="${esc(t)}">${on?"○":""}</button>`}).join("")}</div>
+    ${fi("teach","教育実施者")}
+    <label class="f">備考</label><textarea data-en="note">${esc(e.note)}</textarea>
+    <div class="btns" style="margin-top:10px"><button class="btn p" id="enPrint">この人の調査票・教育記録を印刷/PDF</button><button class="btn s w" id="enDel">この人を削除</button></div>`;
+}
+function addToMembers(e){
+  if(!e||!e.name)return;const nm=e.name.trim();
+  if(members().some(m=>m.name===nm))return;
+  const line=nm+(e.co&&e.co!=="筒賀建設㈱"?","+e.co:"");
+  DB.set.members=(DB.set.members||"").replace(/\s*$/,"")+((DB.set.members||"").trim()?"\n":"")+line;save();toast(nm+" を作業員名簿に追加しました");
+}
+function closeEntrant(){const e=E();EN=null;addToMembers(e);renderAll()}
 function renderCrews(){
   const D=day();
   $("crews").innerHTML=D.crews.map((c,i)=>`<div class="crew">
@@ -494,6 +630,9 @@ function autoFill(){
   if(!D.hours.length)D.hours=[10,15];
   const focus=uniq(W.flatMap(w=>w.ck||[]));
   allItems().forEach(k=>{const t=k.split("|")[1];if(D.checks[k]==="×")return;D.checks[k]=NA_DEFAULT.includes(t)&&!focus.includes(t)?"":"○"});
+  // 新規入場者教育（この日に入場した人）を備考に書く
+  const ents=DB.entrants.filter(e=>e.date===CUR&&e.name);
+  if(ents.length&&!(D.remarks||"").includes("新規入場者教育"))D.remarks=((D.remarks?D.remarks+"\n":"")+"新規入場者教育実施："+ents.map(e=>e.name+(e.co&&e.co!=="筒賀建設㈱"?"（"+e.co+"）":"")).join("、"));
   // KY
   kyFromDay();
   save();renderAll();toast("日報とKYを作成しました");
@@ -537,10 +676,21 @@ function copyPrev(){
   DB.days[CUR]=src;save();renderAll();toast(wareki(keys[keys.length-1])+"をコピーしました");
 }
 
+function goTab(t){document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x.dataset.t===t));document.querySelectorAll("main>section").forEach(s=>s.classList.toggle("hidden",s.id!=="t-"+t));window.scrollTo(0,0)}
+// 一覧だけ描き直す（入力中のフォームはそのまま）
+function renderEduListOnly(){const f=$("enForm");const keep=f.dataset.id;renderEdu();f.dataset.id=keep}
+
 /* ===================== イベント ===================== */
 document.addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;const D=day();
-  if(b.dataset.t){document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll("main>section").forEach(s=>s.classList.toggle("hidden",s.id!=="t-"+b.dataset.t));window.scrollTo(0,0);return}
+  if(b.dataset.t){goTab(b.dataset.t);return}
+  if(b.dataset.plopen){const i=+b.dataset.plopen;PL_OPEN=PL_OPEN===i?null:i;renderPlan();return}
+  if(b.dataset.plw){const [i,k]=b.dataset.plw.split("|");const w=planEdit()[+i][2];const j=w.indexOf(k);if(j>=0)w.splice(j,1);else w.push(k);w.sort((x,y)=>ORDER.indexOf(x)-ORDER.indexOf(y));planChanged();return}
+  if(b.dataset.pldel){if(!confirm("この行を工程表から削除します。よろしいですか？"))return;planEdit().splice(+b.dataset.pldel,1);PL_OPEN=null;planChanged();toast("削除しました");return}
+  if(b.dataset.enopen){const id=b.dataset.enopen;if(EN===id){closeEntrant();return}addToMembers(E());EN=id;renderEdu();$("enForm").scrollIntoView({behavior:"smooth"});return}
+  if(b.dataset.enprint){addToMembers(DB.entrants.find(x=>x.id===b.dataset.enprint));printDocs(["en:"+b.dataset.enprint]);return}
+  if(b.dataset.edu){const e=E(),t=b.dataset.edu;e.eduDone=e.eduDone||[];const j=e.eduDone.indexOf(t);if(j>=0)e.eduDone.splice(j,1);else e.eduDone.push(t);save();b.classList.toggle("o",j<0);b.textContent=j<0?"○":"";renderEduListOnly();return}
+  if(b.dataset.q){const e=E(),q=b.dataset.q;const cur=(e.quals||"").split(/[、\n]/).map(s=>s.trim());if(cur.includes(q)){toast("入力済みです");return}e.quals=(e.quals||"").trim()?e.quals.trim()+"\n"+q:q;$("enQuals").value=e.quals;save();return}
   if(b.dataset.w){D.weather=b.dataset.w;save();renderAll();return}
   if(b.dataset.k){const k=b.dataset.k;D.works=D.works.includes(k)?D.works.filter(x=>x!==k):[...D.works,k];save();renderAll();return}
   if(b.dataset.h){const h=+b.dataset.h;D.hours=D.hours.includes(h)?D.hours.filter(x=>x!==h):[...D.hours,h].sort((a,c)=>a-c);save();renderAll();return}
@@ -556,6 +706,15 @@ document.addEventListener("click",e=>{
     case "autoFill":autoFill();break;
     case "aiFill":aiFill();break;
     case "copyPrev":copyPrev();break;
+    case "toPlan":goTab("set");setTimeout(()=>$("plCard").scrollIntoView({behavior:"smooth"}),30);break;
+    case "plAdd":{const P=planEdit();P.push([CUR,CUR,[]]);PL_OPEN=P.length-1;planChanged();toast("行を追加しました。日付と作業を選んでください");break}
+    case "plReset":if(confirm("工程表を最初の内容に戻します。画面で直した内容は消えます。よろしいですか？")){delete DB.set.plan;PL_OPEN=null;planChanged();toast("最初の工程表に戻しました")}break;
+    case "enAdd":{addToMembers(E());const e=newEntrant();DB.entrants.push(e);EN=e.id;save();renderEdu();$("enForm").scrollIntoView({behavior:"smooth"});break}
+    case "enClose":closeEntrant();break;
+    case "enAllEdu":{const e=E();e.eduDone=eduList(e).slice();save();$("enForm").dataset.id="";renderEdu();break}
+    case "enDel":{const e=E();if(!confirm((e.name||"この人")+" の記録を削除します。よろしいですか？"))return;DB.entrants=DB.entrants.filter(x=>x!==e);EN=null;save();renderEdu();toast("削除しました");break}
+    case "enPrint":addToMembers(E());printDocs(["en:"+EN]);break;
+    case "enPrintList":if(!DB.entrants.length){toast("まだ登録がありません");return}printDocs(["enlist"]);break;
     case "addCrew":D.crews.push({co:"",n:"",work:"",lead:"",ins:""});save();renderCrews();break;
     case "allOk":allItems().forEach(k=>D.checks[k]="○");save();renderChecks();break;
     case "clrCk":D.checks={};save();renderChecks();break;
@@ -563,7 +722,7 @@ document.addEventListener("click",e=>{
     case "ldAdd":{const kg=+$("ldKg").value,car=$("ldCar").value;if(!car||!kg){toast("車番と積載量を入れてください");return}D.loads.push({item:$("ldItem").value,car,kg});$("ldKg").value="";save();renderLoads();const j=judge(car,kg);toast(j?(j.ok?"OK：記録しました":"NG：積載超過です"):"記録しました");break}
     case "pNippo":printDocs(["nippo"]);break;
     case "pKy":printDocs(["ky"]);break;
-    case "pMore":{const c=prompt("印刷する表を番号で選んでください\n1：重機点検表（今月）\n2：積載管理表（今月）\n3：今月の日報をまとめて\n4：今月のKYをまとめて","1");if(c==="1")printDocs(["juki"]);if(c==="2")printDocs(["load"]);if(c==="3")printMonth("nippo");if(c==="4")printMonth("ky");break}
+    case "pMore":{const c=prompt("印刷する表を番号で選んでください\n1：重機点検表（今月）\n2：積載管理表（今月）\n3：今月の日報をまとめて\n4：今月のKYをまとめて\n5：新規入場者教育 実施一覧","1");if(c==="1")printDocs(["juki"]);if(c==="2")printDocs(["load"]);if(c==="3")printMonth("nippo");if(c==="4")printMonth("ky");if(c==="5")printDocs(["enlist"]);break}
     case "exp":{const blob=new Blob([JSON.stringify(DB,null,1)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="genba_backup_"+CUR+".json";a.click();break}
   }
 });
@@ -572,19 +731,27 @@ document.addEventListener("input",e=>{
   if(t.dataset.c!==undefined){D.crews[+t.dataset.c][t.dataset.f]=t.value;save();return}
   if(t.dataset.hz!==undefined){D.ky.hz[+t.dataset.hz]=t.value;save();return}
   if(t.dataset.ac!==undefined){D.ky.ac[+t.dataset.ac]=t.value;save();return}
+  if(t.dataset.en){const e=E();if(!e)return;e[t.dataset.en]=t.value;save();if(t.dataset.en==="birth"||t.dataset.en==="date")$("enAge").innerHTML=ageNote(e);renderEduListOnly();return}
+  if(t.dataset.pl!==undefined)return; // 工程表の日付は change で反映
   const map={materials:"materials",next:"next",coord:"coord",treat:"treat",correct:"correct",remarks:"remarks"};
   if(map[t.id]){D[map[t.id]]=t.value;save();return}
   const km={kyWork:"work",kyGoal:"goal",kyCo:"co",kyLeader:"leader",kyNum:"num"};
   if(km[t.id]){D.ky[km[t.id]]=t.value;save();return}
   if(t.id==="jkBy"){D.jukiBy=t.value;save();return}
-  const sm={sProject:"project",sInst:"inst",sAgent:"agent",sChief:"chief",sPatrol:"patrol",sMembers:"members",sMachines:"machines",sCars:"cars",sItems:"items",sKey:"key"};
+  const sm={sProject:"project",sInst:"inst",sAgent:"agent",sChief:"chief",sPatrol:"patrol",sMembers:"members",sMachines:"machines",sCars:"cars",sItems:"items",sKey:"key",sEdu:"eduItems",sHospital:"hospital"};
   if(sm[t.id]){S[sm[t.id]]=t.value;save();return}
   if(t.id==="sStamp"){S.stamp=t.checked;save();return}
   if(t.id==="ldKg"||t.id==="ldCar"){const j=judge($("ldCar").value,+$("ldKg").value);$("ldJudge").innerHTML=j?`総重量 ${j.total}kg／${j.c.gross}kg、積載 ${$("ldKg").value}kg／${j.c.max}kg → <span class="${j.ok?"ok":"ng"}">${j.ok?"OK":"NG"}</span>`:""}
 });
-document.addEventListener("change",e=>{if(e.target.id==="sStamp"){DB.set.stamp=e.target.checked;save()}if(e.target.id==="ldCar")e.target.dispatchEvent(new Event("input",{bubbles:true}))});
+document.addEventListener("change",e=>{
+  const t=e.target;
+  if(t.dataset.pl!==undefined){if(!t.value)return;planEdit()[+t.dataset.pl][+t.dataset.pf]=t.value;save();t._dirty=true;return}
+  if(t.id==="sEdu"){$("enForm").dataset.id="";renderEdu()}
+  if(e.target.id==="sStamp"){DB.set.stamp=e.target.checked;save()}if(e.target.id==="ldCar")e.target.dispatchEvent(new Event("input",{bubbles:true}))});
+// 工程表の日付は、日付選択を閉じたときに画面へ反映（選択中に描き直すとiPhoneの日付選択が閉じるため）
+document.addEventListener("focusout",e=>{const t=e.target;if(t.dataset&&t.dataset.pl!==undefined&&t._dirty){t._dirty=false;setTimeout(planChanged,250)}});
 $("date").addEventListener("change",e=>{if(!e.target.value)return;CUR=e.target.value;renderAll()});
-$("imp").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.days||!d.set)throw 0;if(confirm("今のデータを、読み込んだバックアップで置き換えます。よろしいですか？")){DB=d;save();renderAll();toast("読み込みました")}}catch(x){toast("読み込めないファイルです")}};r.readAsText(f)});
+$("imp").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.days||!d.set)throw 0;if(confirm("今のデータを、読み込んだバックアップで置き換えます。よろしいですか？")){DB=norm(d);EN=null;PL_OPEN=null;save();renderAll();toast("読み込みました")}}catch(x){toast("読み込めないファイルです")}};r.readAsText(f)});
 
 /* ===================== 印刷 ===================== */
 function stamp(name){if(!DB.set.stamp||!name)return"";const sur=name.split(/\s|　/)[0];return `<div class="stamp">${esc(sur)}</div>`}
@@ -665,8 +832,57 @@ function loadHTML(){
   <tr><th>車検証</th><th>計測量</th><th>車検証</th><th>車検証</th><th>計測量</th></tr>
   ${rows.map(([ds,l])=>{const j=judge(l.car,l.kg);const c=j?j.c:{};return `<tr style="height:6.5mm"><td>${wareki(ds)}</td><td>${esc(l.item)}</td><td class="ctr">${esc(l.car)}</td><td class="ctr">${c.gross||""}</td><td class="ctr">${j?j.total:""}</td><td class="ctr">${c.tare||""}</td><td class="ctr">${c.max||""}</td><td class="ctr">${l.kg}</td><td class="ctr">${j?(j.ok?"ＯＫ":"ＮＧ"):""}</td></tr>`}).join("")||`<tr><td colspan="9">記録なし</td></tr>`}</table></div>`;
 }
+function entrantHTML(e){
+  const S=DB.set,a=ageAt(e.birth,e.date),it=eduList(e),done=e.eduDone||[];
+  const r=(l,v,h=8)=>`<tr style="height:${h}mm"><th>${l}</th><td colspan="3">${v}</td></tr>`;
+  return `<div class="pg"><table style="border:none"><tr>
+  <td style="border:none;width:50%;vertical-align:top;padding-right:3mm">
+    <div class="big ctr" style="padding:4mm 0 3mm">新規入場者調査票</div>
+    <div style="border-bottom:0.6pt solid #000;margin-bottom:2mm;font-size:8pt">工事名：${esc(S.project)}</div>
+    <table style="font-size:9pt">
+      <tr style="height:8mm"><th style="width:28mm">入場年月日</th><td>${e.date?wareki(e.date):""}</td><th style="width:20mm">職　種</th><td style="width:34mm">${esc(e.job)}</td></tr>
+      ${r("会社名",esc(e.co))}
+      <tr style="height:5mm;font-size:7.5pt"><th>ふりがな</th><td colspan="3">${esc(e.kana)}</td></tr>
+      <tr style="height:11mm"><th>氏　名</th><td colspan="3" style="font-size:14pt;padding-left:3mm">${esc(e.name)}</td></tr>
+      <tr style="height:8mm"><th>生年月日</th><td>${jdate(e.birth)}</td><th>年　齢</th><td class="ctr">${a!=null?a:"　"}　歳</td></tr>
+      <tr style="height:8mm"><th>血液型</th><td class="ctr">${esc(e.blood)}${e.blood&&e.blood!=="不明"?"　型":""}</td><th>経験年数</th><td class="ctr">${esc(e.exp)}　年</td></tr>
+      ${r("現住所",esc(e.addr),10)}
+      ${r("電話番号",esc(e.tel))}
+      <tr style="height:8mm"><th rowspan="2">緊急連絡先</th><td colspan="3">氏名：${esc(e.emName)}　　（続柄：${esc(e.emRel)}　）</td></tr>
+      <tr style="height:8mm"><td colspan="3">電話：${esc(e.emTel)}</td></tr>
+      ${r("資格・免許",`<span style="font-size:8pt">${esc((e.quals||"").split("\n").filter(Boolean).join("、"))}</span>`,16)}
+      <tr style="height:8mm"><th>健康診断</th><td>受診日：${jdate(e.health)}</td><th>血　圧</th><td class="ctr">${esc(e.bp)}</td></tr>
+      ${r("特殊健康診断",esc(e.special))}
+      <tr style="height:8mm"><th rowspan="2">社会保険等</th><td colspan="3">健康保険：${esc(e.kenpo)}　　年金：${esc(e.nenkin)}</td></tr>
+      <tr style="height:8mm"><td colspan="3">雇用保険：${esc(e.koyo)}　　建退共：${esc(e.kentai)}</td></tr>
+      ${r("備　考",`<span style="font-size:8pt">${nl(e.note)}</span>`,12)}
+    </table>
+  </td>
+  <td style="border:none;width:50%;vertical-align:top;padding-left:3mm">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start"><div class="big" style="padding-top:4mm">新規入場時教育記録</div><div>${sbox("現場代理人",S.agent)}${sbox("教育実施者",e.teach)}</div></div>
+    <div style="margin:1mm 0 2mm;font-size:9pt">実施日：${e.date?wareki(e.date):""}　　時間：${esc(e.time)}　　実施者：${esc(e.teach)}</div>
+    <table style="font-size:8.5pt">
+      <tr style="height:6mm"><th class="ctr" style="width:8mm">No</th><th class="ctr">教　育　内　容</th><th class="ctr" style="width:13mm">実施</th></tr>
+      ${it.map((t,i)=>`<tr style="height:${it.length>14?5.6:6.6}mm"><td class="ctr">${i+1}</td><td>${esc(t)}</td><td class="ctr">${done.includes(t)?"○":""}</td></tr>`).join("")}
+    </table>
+    <table style="margin-top:2mm;font-size:9pt"><tr style="height:8mm"><th style="width:34mm">最寄りの病院</th><td>${esc(S.hospital)}</td></tr></table>
+    <table style="margin-top:2mm;font-size:9.5pt"><tr><td style="padding:2mm 3mm;height:24mm;vertical-align:top">上記の内容について教育を受け、理解しました。<br>現場のルールを守り、安全に作業します。
+      <div style="margin-top:6mm;text-align:right">本人署名　<span style="display:inline-block;width:52mm;border-bottom:0.6pt solid #000">&nbsp;</span></div></td></tr></table>
+  </td></tr></table></div>`;
+}
+function entrantListHTML(){
+  const S=DB.set,L=DB.entrants.slice().sort((x,y)=>(x.date||"").localeCompare(y.date||""));const per=15,pages=[];
+  for(let p=0;p<Math.max(1,Math.ceil(L.length/per));p++){
+    const rows=L.slice(p*per,p*per+per);while(rows.length<per)rows.push(null);
+    pages.push(`<div class="pg"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div class="big" style="padding-top:3mm">新規入場者教育 実施記録</div><div style="font-size:8.5pt;margin-top:2mm">工事名：${esc(S.project)}</div></div><div>${sbox("現場代理人",S.agent)}</div></div>
+    <table style="font-size:8pt;margin-top:2mm"><tr style="height:8mm"><th class="ctr" style="width:8mm">No</th><th class="ctr" style="width:20mm">実施日</th><th class="ctr" style="width:30mm">会社名</th><th class="ctr" style="width:20mm">職種</th><th class="ctr" style="width:28mm">氏名</th><th class="ctr" style="width:10mm">年齢</th><th class="ctr" style="width:11mm">血液型</th><th class="ctr" style="width:11mm">経験<br>年数</th><th class="ctr">資格・免許</th><th class="ctr" style="width:18mm">健康診断</th><th class="ctr" style="width:20mm">教育実施者</th><th class="ctr" style="width:28mm">本人署名</th></tr>
+    ${rows.map((e,i)=>e?`<tr style="height:10.5mm"><td class="ctr">${p*per+i+1}</td><td class="ctr">${rd(e.date)}</td><td style="font-size:7.5pt">${esc(e.co)}</td><td style="font-size:7.5pt">${esc(e.job)}</td><td>${esc(e.name)}</td><td class="ctr">${ageAt(e.birth,e.date)??""}</td><td class="ctr">${esc(e.blood)}</td><td class="ctr">${esc(e.exp)}</td><td style="font-size:6.5pt">${esc((e.quals||"").split("\n").filter(Boolean).join("、"))}</td><td class="ctr">${rd(e.health)}</td><td class="ctr">${esc(e.teach)}</td><td></td></tr>`:`<tr style="height:10.5mm"><td class="ctr">${p*per+i+1}</td>${"<td></td>".repeat(11)}</tr>`).join("")}
+    </table></div>`);
+  }
+  return pages.join("");
+}
 function printDocs(kinds){
-  let h="";for(const k of kinds){if(k==="nippo")h+=nippoHTML(CUR);if(k==="ky")h+=kyHTML(CUR);if(k==="juki")h+=jukiHTML();if(k==="load")h+=loadHTML()}
+  let h="";for(const k of kinds){if(k.startsWith("en:")){const e=DB.entrants.find(x=>x.id===k.slice(3));if(e)h+=entrantHTML(e)}if(k==="enlist")h+=entrantListHTML();if(k==="nippo")h+=nippoHTML(CUR);if(k==="ky")h+=kyHTML(CUR);if(k==="juki")h+=jukiHTML();if(k==="load")h+=loadHTML()}
   $("print").innerHTML=h;setTimeout(()=>window.print(),50);
 }
 function printMonth(kind){
